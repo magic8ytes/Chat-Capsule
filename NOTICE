@@ -1,0 +1,19 @@
+Chat Capsule 第三方声明
+=======================
+
+本仓库为以下上游项目的维护分支：
+- WeFlow (https://github.com/hicccc77/WeFlow)
+  License: CC BY-NC-SA 4.0
+
+本项目通过 npm 依赖与原生二进制组件引入第三方软件。各组件遵循其各自许可证。
+请在再分发前逐一确认并遵守相关许可证义务。
+
+完整的依赖树记录在 package-lock.json 中。
+
+已知可能被打包/分发的组件（非完整清单）：
+- ffmpeg-static
+- sherpa-onnx-node
+- silk-wasm
+- jieba-wasm
+
+如果你分发构建产物，请自行确保符合所有第三方许可证要求。

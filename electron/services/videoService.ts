@@ -1,0 +1,372 @@
+import { join } from 'path'
+import { access, appendFile, mkdir, readFile, readdir } from 'fs/promises'
+import { app } from 'electron'
+import { ConfigService } from './config'
+import Database from 'better-sqlite3'
+import { wcdbReadonlySqlGateway } from './wcdbReadonlySqlGateway'
+
+export interface VideoInfo {
+    videoUrl?: string       // 视频文件路径（用于 readFile）
+    coverUrl?: string       // 封面 data URL
+    thumbUrl?: string       // 缩略图 data URL
+    exists: boolean
+}
+
+class VideoService {
+    private configService: ConfigService
+    private logQueue: Promise<void> = Promise.resolve()
+
+    constructor() {
+        this.configService = new ConfigService()
+    }
+
+    private log(message: string, meta?: Record<string, unknown>): void {
+        try {
+            const timestamp = new Date().toISOString()
+            const metaStr = meta ? ` ${JSON.stringify(meta)}` : ''
+            const logDir = join(app.getPath('userData'), 'logs')
+            const logPath = join(logDir, 'wcdb.log')
+            this.logQueue = this.logQueue
+                .then(async () => {
+                    await mkdir(logDir, { recursive: true })
+                    await appendFile(logPath, `[${timestamp}] [VideoService] ${message}${metaStr}\n`, 'utf8')
+                })
+                .catch(() => {})
+        } catch {}
+    }
+
+    /**
+     * 获取数据库根目录
+     */
+    private getDbPath(): string {
+        return this.configService.get('dbPath') || ''
+    }
+
+    /**
+     * 获取当前用户的wxid
+     */
+    private getMyWxid(): string {
+        return this.configService.get('myWxid') || ''
+    }
+
+    /**
+     * 获取缓存目录（解密后的数据库存放位置）
+     */
+    private getCachePath(): string {
+        return this.configService.getCacheBasePath()
+    }
+
+    /**
+     * 清理 wxid 目录名（去掉后缀）
+     */
+    private cleanWxid(wxid: string): string {
+        const trimmed = wxid.trim()
+        if (!trimmed) return trimmed
+
+        if (trimmed.toLowerCase().startsWith('wxid_')) {
+            const match = trimmed.match(/^(wxid_[^_]+)/i)
+            if (match) return match[1]
+            return trimmed
+        }
+
+        const suffixMatch = trimmed.match(/^(.+)_([a-zA-Z0-9]{4})$/)
+        if (suffixMatch) return suffixMatch[1]
+
+        return trimmed
+    }
+
+    /**
+     * 从 video_hardlink_info_v4 表查询视频文件名
+     * 优先使用 cachePath 中解密后的 hardlink.db（使用 better-sqlite3）
+     * 如果失败，则尝试使用 wcdbService.execQuery 查询加密的 hardlink.db
+     */
+    private async queryVideoFileName(md5: string): Promise<string | undefined> {
+        const cachePath = this.getCachePath()
+        const dbPath = this.getDbPath()
+        const wxid = this.getMyWxid()
+        const cleanedWxid = this.cleanWxid(wxid)
+
+        this.log('queryVideoFileName 开始', { md5, wxid, cleanedWxid, cachePath, dbPath })
+
+        if (!wxid) {
+            this.log('queryVideoFileName: wxid 为空')
+            return undefined
+        }
+
+        // 方法1：优先在 cachePath 下查找解密后的 hardlink.db
+        if (cachePath) {
+            const cacheDbPaths = [
+                join(cachePath, cleanedWxid, 'hardlink.db'),
+                join(cachePath, wxid, 'hardlink.db'),
+                join(cachePath, 'hardlink.db'),
+                join(cachePath, 'databases', cleanedWxid, 'hardlink.db'),
+                join(cachePath, 'databases', wxid, 'hardlink.db')
+            ]
+
+            for (const p of cacheDbPaths) {
+                if (await this.pathExists(p)) {
+                    try {
+                        this.log('尝试缓存 hardlink.db', { path: p })
+                        const db = new Database(p, { readonly: true })
+                        const row = db.prepare(`
+                            SELECT file_name, md5 FROM video_hardlink_info_v4
+                            WHERE md5 = ?
+                            LIMIT 1
+                        `).get(md5) as { file_name: string; md5: string } | undefined
+                        db.close()
+
+                        if (row?.file_name) {
+                            const realMd5 = row.file_name.replace(/\.[^.]+$/, '')
+                            this.log('缓存 hardlink.db 命中', { file_name: row.file_name, realMd5 })
+                            return realMd5
+                        }
+                        this.log('缓存 hardlink.db 未命中', { path: p })
+                    } catch (e) {
+                        this.log('缓存 hardlink.db 查询失败', { path: p, error: String(e) })
+                    }
+                }
+            }
+        }
+
+        // 方法2：使用 wcdbService.execQuery 查询加密的 hardlink.db
+        if (dbPath) {
+            const dbPathLower = dbPath.toLowerCase()
+            const wxidLower = wxid.toLowerCase()
+            const cleanedWxidLower = cleanedWxid.toLowerCase()
+            const dbPathContainsWxid = dbPathLower.includes(wxidLower) || dbPathLower.includes(cleanedWxidLower)
+
+            const encryptedDbPaths: string[] = []
+            if (dbPathContainsWxid) {
+                encryptedDbPaths.push(join(dbPath, 'db_storage', 'hardlink', 'hardlink.db'))
+            } else {
+                encryptedDbPaths.push(join(dbPath, wxid, 'db_storage', 'hardlink', 'hardlink.db'))
+                encryptedDbPaths.push(join(dbPath, cleanedWxid, 'db_storage', 'hardlink', 'hardlink.db'))
+            }
+
+            for (const p of encryptedDbPaths) {
+                if (await this.pathExists(p)) {
+                    try {
+                        this.log('尝试加密 hardlink.db', { path: p })
+                        const escapedMd5 = md5.replace(/'/g, "''")
+                        const sql = `SELECT file_name FROM video_hardlink_info_v4 WHERE md5 = '${escapedMd5}' LIMIT 1`
+                        const result = await wcdbReadonlySqlGateway.execQuery('media', p, sql)
+
+                        if (result.success && result.rows && result.rows.length > 0) {
+                            const row = result.rows[0]
+                            if (row?.file_name) {
+                                const realMd5 = String(row.file_name).replace(/\.[^.]+$/, '')
+                                this.log('加密 hardlink.db 命中', { file_name: row.file_name, realMd5 })
+                                return realMd5
+                            }
+                        }
+                        this.log('加密 hardlink.db 未命中', { path: p, result: JSON.stringify(result).slice(0, 200) })
+                    } catch (e) {
+                        this.log('加密 hardlink.db 查询失败', { path: p, error: String(e) })
+                    }
+                } else {
+                    this.log('加密 hardlink.db 不存在', { path: p })
+                }
+            }
+        }
+        this.log('queryVideoFileName: 所有方法均未找到', { md5 })
+        return undefined
+    }
+
+    private async pathExists(filePath: string): Promise<boolean> {
+        try {
+            await access(filePath)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /**
+     * 将文件转换为 data URL
+     */
+    private async fileToDataUrl(filePath: string, mimeType: string): Promise<string | undefined> {
+        try {
+            if (!(await this.pathExists(filePath))) return undefined
+            const buffer = await readFile(filePath)
+            return `data:${mimeType};base64,${buffer.toString('base64')}`
+        } catch {
+            return undefined
+        }
+    }
+
+    /**
+     * 根据视频MD5获取视频文件信息
+     * 视频存放在: {数据库根目录}/{用户wxid}/msg/video/{年月}/
+     * 文件命名: {md5}.mp4, {md5}.jpg, {md5}_thumb.jpg
+     */
+    async getVideoInfo(videoMd5: string): Promise<VideoInfo> {
+        const dbPath = this.getDbPath()
+        const wxid = this.getMyWxid()
+
+        this.log('getVideoInfo 开始', { videoMd5, dbPath, wxid })
+
+        if (!dbPath || !wxid || !videoMd5) {
+            this.log('getVideoInfo: 参数缺失', { dbPath: !!dbPath, wxid: !!wxid, videoMd5: !!videoMd5 })
+            return { exists: false }
+        }
+
+        const realVideoMd5 = await this.queryVideoFileName(videoMd5) || videoMd5
+        this.log('realVideoMd5', { input: videoMd5, resolved: realVideoMd5, changed: realVideoMd5 !== videoMd5 })
+
+        const dbPathLower = dbPath.toLowerCase()
+        const wxidLower = wxid.toLowerCase()
+        const cleanedWxid = this.cleanWxid(wxid)
+
+        let videoBaseDir: string
+        if (dbPathLower.includes(wxidLower) || dbPathLower.includes(cleanedWxid.toLowerCase())) {
+            videoBaseDir = join(dbPath, 'msg', 'video')
+        } else {
+            videoBaseDir = join(dbPath, wxid, 'msg', 'video')
+        }
+
+        const videoBaseDirExists = await this.pathExists(videoBaseDir)
+        this.log('videoBaseDir', { videoBaseDir, exists: videoBaseDirExists })
+
+        if (!videoBaseDirExists) {
+            this.log('getVideoInfo: videoBaseDir 不存在')
+            return { exists: false }
+        }
+
+        try {
+            const dirEntries = await readdir(videoBaseDir, { withFileTypes: true })
+            const yearMonthDirs = dirEntries
+                .filter((dir) => dir.isDirectory())
+                .map((dir) => dir.name)
+                .sort((a, b) => b.localeCompare(a))
+
+            this.log('扫描目录', { dirs: yearMonthDirs })
+
+            for (const yearMonth of yearMonthDirs) {
+                const dirPath = join(videoBaseDir, yearMonth)
+                const videoPath = join(dirPath, `${realVideoMd5}.mp4`)
+
+                if (await this.pathExists(videoPath)) {
+                    const baseMd5 = realVideoMd5.replace(/_raw$/, '')
+                    const coverPath = join(dirPath, `${baseMd5}.jpg`)
+                    const thumbPath = join(dirPath, `${baseMd5}_thumb.jpg`)
+                    const allFiles = await readdir(dirPath).catch(() => [] as string[])
+                    const relatedFiles = allFiles.filter((file) => file.toLowerCase().startsWith(realVideoMd5.slice(0, 8).toLowerCase()))
+                    const [coverExists, thumbExists, coverUrl, thumbUrl] = await Promise.all([
+                        this.pathExists(coverPath),
+                        this.pathExists(thumbPath),
+                        this.fileToDataUrl(coverPath, 'image/jpeg'),
+                        this.fileToDataUrl(thumbPath, 'image/jpeg')
+                    ])
+
+                    this.log('找到视频，相关文件列表', {
+                        videoPath,
+                        coverExists,
+                        thumbExists,
+                        relatedFiles,
+                        coverPath,
+                        thumbPath
+                    })
+
+                    return {
+                        videoUrl: videoPath,
+                        coverUrl,
+                        thumbUrl,
+                        exists: true
+                    }
+                }
+            }
+
+            this.log('未找到视频，开始全目录扫描', {
+                lookingForOriginal: `${videoMd5}.mp4`,
+                lookingForResolved: `${realVideoMd5}.mp4`,
+                hardlinkResolved: realVideoMd5 !== videoMd5
+            })
+            for (const yearMonth of yearMonthDirs) {
+                const dirPath = join(videoBaseDir, yearMonth)
+                try {
+                    const allFiles = await readdir(dirPath)
+                    const mp4Files = allFiles.filter((file) => file.endsWith('.mp4'))
+                    const sampleMp4 = mp4Files.slice(0, 10)
+                    const partialMatch = sampleMp4.filter((file) => file.toLowerCase().startsWith(videoMd5.slice(0, 8).toLowerCase()))
+                    this.log(`目录 ${yearMonth} 扫描结果`, {
+                        totalFiles: allFiles.length,
+                        mp4Count: mp4Files.length,
+                        sampleMp4,
+                        partialMatchByOriginalMd5: partialMatch
+                    })
+                } catch (e) {
+                    this.log(`目录 ${yearMonth} 读取失败`, { error: String(e) })
+                }
+            }
+        } catch (e) {
+            this.log('getVideoInfo 遍历出错', { error: String(e) })
+        }
+
+        this.log('getVideoInfo: 未找到视频', { videoMd5, realVideoMd5 })
+        return { exists: false }
+    }
+
+    /**
+     * 根据消息内容解析视频MD5
+     */
+    parseVideoMd5(content: string): string | undefined {
+        if (!content) return undefined
+
+        // 打印原始 XML 前 800 字符，帮助排查自己发的视频结构
+        this.log('parseVideoMd5 原始内容', { preview: content.slice(0, 800) })
+
+        try {
+            // 收集所有 md5 相关属性，方便对比
+            const allMd5Attrs: string[] = []
+            const md5Regex = /(?:md5|rawmd5|newmd5|originsourcemd5)\s*=\s*['"]([a-fA-F0-9]*)['"]/gi
+            let match
+            while ((match = md5Regex.exec(content)) !== null) {
+                allMd5Attrs.push(match[0])
+            }
+            this.log('parseVideoMd5 所有 md5 属性', { attrs: allMd5Attrs })
+
+            // 方法1：从 <videomsg md5="..."> 提取（收到的视频）
+            const videoMsgMd5Match = /<videomsg[^>]*\smd5\s*=\s*['"]([a-fA-F0-9]+)['"]/i.exec(content)
+            if (videoMsgMd5Match) {
+                this.log('parseVideoMd5 命中 videomsg md5 属性', { md5: videoMsgMd5Match[1] })
+                return videoMsgMd5Match[1].toLowerCase()
+            }
+
+            // 方法2：从 <videomsg rawmd5="..."> 提取（自己发的视频，没有 md5 只有 rawmd5）
+            const rawMd5Match = /<videomsg[^>]*\srawmd5\s*=\s*['"]([a-fA-F0-9]+)['"]/i.exec(content)
+            if (rawMd5Match) {
+                this.log('parseVideoMd5 命中 videomsg rawmd5 属性（自发视频）', { rawmd5: rawMd5Match[1] })
+                return rawMd5Match[1].toLowerCase()
+            }
+
+            // 方法3：任意属性 md5="..."（非 rawmd5/cdnthumbaeskey 等）
+            const attrMatch = /(?<![a-z])md5\s*=\s*['"]([a-fA-F0-9]+)['"]/i.exec(content)
+            if (attrMatch) {
+                this.log('parseVideoMd5 命中通用 md5 属性', { md5: attrMatch[1] })
+                return attrMatch[1].toLowerCase()
+            }
+
+            // 方法4：<md5>...</md5> 标签
+            const md5TagMatch = /<md5>([a-fA-F0-9]+)<\/md5>/i.exec(content)
+            if (md5TagMatch) {
+                this.log('parseVideoMd5 命中 md5 标签', { md5: md5TagMatch[1] })
+                return md5TagMatch[1].toLowerCase()
+            }
+
+            // 方法5：兜底取 rawmd5 属性（任意位置）
+            const rawMd5Fallback = /\srawmd5\s*=\s*['"]([a-fA-F0-9]+)['"]/i.exec(content)
+            if (rawMd5Fallback) {
+                this.log('parseVideoMd5 兜底命中 rawmd5', { rawmd5: rawMd5Fallback[1] })
+                return rawMd5Fallback[1].toLowerCase()
+            }
+
+            this.log('parseVideoMd5 未提取到任何 md5', { contentLength: content.length })
+        } catch (e) {
+            this.log('parseVideoMd5 异常', { error: String(e) })
+        }
+
+        return undefined
+    }
+}
+
+export const videoService = new VideoService()

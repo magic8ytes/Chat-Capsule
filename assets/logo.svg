@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Chat Capsule Logo">
+  <defs>
+    <linearGradient id="capMain" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B1F2A"/>
+      <stop offset="60%" stop-color="#14344A"/>
+      <stop offset="100%" stop-color="#1B4C68"/>
+    </linearGradient>
+    <linearGradient id="capHighlight" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6EE7F5" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#9BE7B9" stop-opacity="0.9"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="140" y="220" width="744" height="584" rx="292" fill="#08161F"/>
+  <rect x="160" y="240" width="704" height="544" rx="272" fill="url(#capMain)"/>
+
+  <path d="M240 260 L520 260 L820 740 L540 740 Z" fill="url(#capHighlight)" opacity="0.85"/>
+  <path d="M280 300 L470 300 L720 700 L530 700 Z" fill="#FFFFFF" opacity="0.08"/>
+
+  <circle cx="320" cy="512" r="72" fill="#0B1F2A" opacity="0.6"/>
+  <circle cx="704" cy="512" r="72" fill="#0B1F2A" opacity="0.6"/>
+</svg>

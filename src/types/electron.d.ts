@@ -1,0 +1,691 @@
+import type { ChatSession, Message, Contact, ContactInfo } from './models'
+import type { AppCapabilities, ProfileSourceMode } from './platform'
+import type { PublicConfigKey } from '../../shared/contracts/config'
+
+export interface SessionChatWindowOpenOptions {
+  source?: 'chat' | 'export'
+  initialDisplayName?: string
+  initialAvatarUrl?: string
+  initialContactType?: ContactInfo['type']
+}
+
+export interface MacProfileProbeEntry {
+  relativePath: string
+  sourcePath: string
+  encryptedSourcePath?: string
+  decryptedSourcePath?: string
+  localPath?: string
+  success: boolean
+  tableCount?: number
+  error?: string
+}
+
+export interface MacProfileSetupInfo {
+  defaultProfilePath: string
+  managedProfilePath: string
+  profileDirectory: string
+  isPackaged: boolean
+  resolutionMode: 'env-override' | 'managed-user-data' | 'development-project-root'
+}
+
+export interface MacProfilePayload {
+  schemaVersion?: number
+  platform?: 'macos'
+  accountRoot?: string
+  dbStoragePath?: string
+  wxid?: string
+  databaseKeys?: Record<string, { enc_key: string; salt: string; size_mb?: number }>
+  imageXorKey?: number
+  imageAesKey?: string
+  cachePath?: string
+  readOnly?: boolean
+}
+
+export interface MacProfilePayloadResult {
+  success: boolean
+  profile?: MacProfilePayload
+  error?: string
+}
+
+export interface ElectronAPI {
+  window: {
+    minimize: () => void
+    maximize: () => void
+    close: () => void
+    openAgreementWindow: () => Promise<boolean>
+    completeOnboarding: () => Promise<boolean>
+    openOnboardingWindow: () => Promise<boolean>
+    setTitleBarOverlay: (options: { symbolColor: string }) => void
+    openVideoPlayerWindow: (videoPath: string, videoWidth?: number, videoHeight?: number) => Promise<void>
+    resizeToFitVideo: (videoWidth: number, videoHeight: number) => Promise<void>
+    openImageViewerWindow: (imagePath: string, liveVideoPath?: string) => Promise<void>
+    openChatHistoryWindow: (sessionId: string, messageId: number) => Promise<boolean>
+    openSessionChatWindow: (sessionId: string, options?: SessionChatWindowOpenOptions) => Promise<boolean>
+  }
+  config: {
+    get: (key: PublicConfigKey) => Promise<unknown>
+    set: (key: PublicConfigKey, value: unknown) => Promise<boolean>
+  }
+  auth: {
+    hello: (message?: string) => Promise<{ success: boolean; error?: string }>
+    verifyEnabled: () => Promise<boolean>
+    unlock: (password: string) => Promise<{ success: boolean; error?: string }>
+    enableLock: (password: string) => Promise<{ success: boolean; error?: string }>
+    disableLock: (password: string) => Promise<{ success: boolean; error?: string }>
+    changePassword: (oldPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>
+    setHelloSecret: (password: string) => Promise<{ success: boolean }>
+    clearHelloSecret: () => Promise<{ success: boolean }>
+    isLockMode: () => Promise<boolean>
+  }
+  dialog: {
+    openFile: (options?: Electron.OpenDialogOptions) => Promise<Electron.OpenDialogReturnValue>
+    openDirectory: (options?: Electron.OpenDialogOptions) => Promise<Electron.OpenDialogReturnValue>
+    saveFile: (options?: Electron.SaveDialogOptions) => Promise<Electron.SaveDialogReturnValue>
+  }
+  shell: {
+    openPath: (path: string) => Promise<string>
+    openExternal: (url: string) => Promise<void>
+  }
+  app: {
+    getCapabilities: () => Promise<AppCapabilities>
+    getMacProfileSetup: () => Promise<MacProfileSetupInfo>
+    getMacProfile: () => Promise<MacProfilePayloadResult>
+    importMacProfile: (sourcePath: string) => Promise<{ success: boolean; profilePath?: string; error?: string }>
+    exportMacProfile: (targetPath: string) => Promise<{ success: boolean; profilePath?: string; error?: string }>
+    exportMacProfileTemplate: (targetPath: string) => Promise<{ success: boolean; profilePath?: string; error?: string }>
+    createMacProfile: (payload: MacProfilePayload) => Promise<{ success: boolean; profilePath?: string; error?: string }>
+    probeMacProfile: () => Promise<{
+      success: boolean
+      sourceMode?: ProfileSourceMode
+      probes: MacProfileProbeEntry[]
+      probedAt: number
+      error?: string
+    }>
+    getDownloadsPath: () => Promise<string>
+    getVersion: () => Promise<string>
+  }
+  diagnostics: {
+    getExportCardLogs: (options?: { limit?: number }) => Promise<{
+      logs: Array<{
+        id: string
+        ts: number
+        source: 'frontend' | 'main' | 'backend' | 'worker'
+        level: 'debug' | 'info' | 'warn' | 'error'
+        message: string
+        traceId?: string
+        stepId?: string
+        stepName?: string
+        status?: 'running' | 'done' | 'failed' | 'timeout'
+        durationMs?: number
+        data?: Record<string, unknown>
+      }>
+      activeSteps: Array<{
+        traceId: string
+        stepId: string
+        stepName: string
+        source: 'frontend' | 'main' | 'backend' | 'worker'
+        elapsedMs: number
+        stallMs: number
+        startedAt: number
+        lastUpdatedAt: number
+        message?: string
+      }>
+      summary: {
+        totalLogs: number
+        activeStepCount: number
+        errorCount: number
+        warnCount: number
+        timeoutCount: number
+        lastUpdatedAt: number
+      }
+    }>
+    clearExportCardLogs: () => Promise<{ success: boolean }>
+    exportExportCardLogs: (payload: {
+      filePath: string
+      frontendLogs?: unknown[]
+    }) => Promise<{
+      success: boolean
+      filePath?: string
+      summaryPath?: string
+      count?: number
+      error?: string
+    }>
+  }
+  chat: {
+    connect: () => Promise<{ success: boolean; error?: string }>
+    getSessions: () => Promise<{ success: boolean; sessions?: ChatSession[]; error?: string }>
+    getSessionStatuses: (usernames: string[]) => Promise<{
+      success: boolean
+      map?: Record<string, { isFolded?: boolean; isMuted?: boolean }>
+      error?: string
+    }>
+    getExportTabCounts: () => Promise<{
+      success: boolean
+      counts?: {
+        private: number
+        group: number
+        official: number
+        former_friend: number
+      }
+      error?: string
+    }>
+    getContactTypeCounts: () => Promise<{
+      success: boolean
+      counts?: {
+        private: number
+        group: number
+        official: number
+        former_friend: number
+      }
+      error?: string
+    }>
+    getSessionMessageCounts: (sessionIds: string[]) => Promise<{
+      success: boolean
+      counts?: Record<string, number>
+      error?: string
+    }>
+    enrichSessionsContactInfo: (
+      usernames: string[],
+      options?: { skipDisplayName?: boolean; onlyMissingAvatar?: boolean }
+    ) => Promise<{
+      success: boolean
+      contacts?: Record<string, { displayName?: string; avatarUrl?: string }>
+      error?: string
+    }>
+    getMessages: (sessionId: string, offset?: number, limit?: number, startTime?: number, endTime?: number, ascending?: boolean) => Promise<{
+      success: boolean;
+      messages?: Message[];
+      hasMore?: boolean;
+      error?: string
+    }>
+    getLatestMessages: (sessionId: string, limit?: number) => Promise<{
+      success: boolean
+      messages?: Message[]
+      hasMore?: boolean
+      error?: string
+    }>
+    getNewMessages: (sessionId: string, minTime: number, limit?: number) => Promise<{
+      success: boolean
+      messages?: Message[]
+      error?: string
+    }>
+    getCachedMessages: (sessionId: string) => Promise<{
+      success: boolean
+      messages?: Message[]
+      error?: string
+    }>
+    clearCurrentAccountData: (options: { clearCache?: boolean; clearExports?: boolean; clearProfile?: boolean }) => Promise<{
+      success: boolean
+      removedPaths?: string[]
+      warning?: string
+      error?: string
+    }>
+    getContact: (username: string) => Promise<Contact | null>
+    getContactAvatar: (username: string) => Promise<{ avatarUrl?: string; displayName?: string } | null>
+    resolveTransferDisplayNames: (chatroomId: string, payerUsername: string, receiverUsername: string) => Promise<{ payerName: string; receiverName: string }>
+    getContacts: () => Promise<{
+      success: boolean
+      contacts?: ContactInfo[]
+      error?: string
+    }>
+    getMyAvatarUrl: () => Promise<{ success: boolean; avatarUrl?: string; error?: string }>
+    downloadEmoji: (cdnUrl: string, md5?: string) => Promise<{ success: boolean; localPath?: string; error?: string }>
+    close: () => Promise<boolean>
+    getSessionDetail: (sessionId: string) => Promise<{
+      success: boolean
+      detail?: {
+        wxid: string
+        displayName: string
+        remark?: string
+        nickName?: string
+        alias?: string
+        avatarUrl?: string
+        messageCount: number
+        firstMessageTime?: number
+        latestMessageTime?: number
+        messageTables: { dbName: string; tableName: string; count: number }[]
+      }
+      error?: string
+    }>
+    getSessionDetailFast: (sessionId: string) => Promise<{
+      success: boolean
+      detail?: {
+        wxid: string
+        displayName: string
+        remark?: string
+        nickName?: string
+        alias?: string
+        avatarUrl?: string
+        messageCount: number
+      }
+      error?: string
+    }>
+    getSessionDetailExtra: (sessionId: string) => Promise<{
+      success: boolean
+      detail?: {
+        firstMessageTime?: number
+        latestMessageTime?: number
+        messageTables: { dbName: string; tableName: string; count: number }[]
+      }
+      error?: string
+    }>
+    getExportSessionStats: (
+      sessionIds: string[],
+      options?: {
+        includeRelations?: boolean
+        forceRefresh?: boolean
+        allowStaleCache?: boolean
+        preferAccurateSpecialTypes?: boolean
+        cacheOnly?: boolean
+      }
+    ) => Promise<{
+      success: boolean
+      data?: Record<string, {
+        totalMessages: number
+        voiceMessages: number
+        imageMessages: number
+        videoMessages: number
+        emojiMessages: number
+        transferMessages: number
+        redPacketMessages: number
+        callMessages: number
+        firstTimestamp?: number
+        lastTimestamp?: number
+        privateMutualGroups?: number
+        groupMemberCount?: number
+        groupMyMessages?: number
+        groupActiveSpeakers?: number
+        groupMutualFriends?: number
+      }>
+      cache?: Record<string, {
+        updatedAt: number
+        stale: boolean
+        includeRelations: boolean
+        source: 'memory' | 'disk' | 'fresh'
+      }>
+      needsRefresh?: string[]
+      error?: string
+    }>
+    getGroupMyMessageCountHint: (chatroomId: string) => Promise<{
+      success: boolean
+      count?: number
+      updatedAt?: number
+      source?: 'memory' | 'disk'
+      error?: string
+    }>
+    getImageData: (sessionId: string, msgId: string) => Promise<{ success: boolean; data?: string; error?: string }>
+    getVoiceData: (sessionId: string, msgId: string, createTime?: number, serverId?: string | number) => Promise<{ success: boolean; data?: string; error?: string }>
+    getAllVoiceMessages: (sessionId: string) => Promise<{ success: boolean; messages?: Message[]; error?: string }>
+    getAllImageMessages: (sessionId: string) => Promise<{
+      success: boolean
+      images?: { imageMd5?: string; imageDatName?: string; createTime?: number }[]
+      error?: string
+    }>
+    getImageMessageDateCounts: (sessionId: string) => Promise<{ success: boolean; counts?: Record<string, number>; error?: string }>
+    getImageMessagesByDates: (sessionId: string, dates: string[]) => Promise<{
+      success: boolean
+      images?: { imageMd5?: string; imageDatName?: string; createTime?: number }[]
+      error?: string
+    }>
+    getMessageDates: (sessionId: string) => Promise<{ success: boolean; dates?: string[]; error?: string }>
+    getMessageDateCounts: (sessionId: string) => Promise<{ success: boolean; counts?: Record<string, number>; error?: string }>
+    resolveVoiceCache: (sessionId: string, msgId: string) => Promise<{ success: boolean; hasCache: boolean; data?: string }>
+    getVoiceTranscript: (sessionId: string, msgId: string, createTime?: number) => Promise<{ success: boolean; transcript?: string; error?: string }>
+    onVoiceTranscriptPartial: (callback: (payload: { msgId: string; text: string }) => void) => () => void
+    getMessage: (sessionId: string, localId: number) => Promise<{ success: boolean; message?: Message; error?: string }>
+    onWcdbChange: (callback: (event: unknown, data: { type: string; json: string }) => void) => () => void
+  }
+
+  image: {
+    decrypt: (payload: { sessionId?: string; imageMd5?: string; imageDatName?: string; force?: boolean }) => Promise<{ success: boolean; localPath?: string; liveVideoPath?: string; isThumb?: boolean; error?: string }>
+    resolveCache: (payload: { sessionId?: string; imageMd5?: string; imageDatName?: string }) => Promise<{ success: boolean; localPath?: string; hasUpdate?: boolean; liveVideoPath?: string; isThumb?: boolean; error?: string }>
+    preload: (payloads: Array<{ sessionId?: string; imageMd5?: string; imageDatName?: string }>) => Promise<boolean>
+    onUpdateAvailable: (callback: (payload: { cacheKey: string; imageMd5?: string; imageDatName?: string }) => void) => () => void
+    onCacheResolved: (callback: (payload: { cacheKey: string; imageMd5?: string; imageDatName?: string; localPath: string; isThumb?: boolean }) => void) => () => void
+  }
+  video: {
+    getVideoInfo: (videoMd5: string) => Promise<{
+      success: boolean
+      exists: boolean
+      videoUrl?: string
+      coverUrl?: string
+      thumbUrl?: string
+      error?: string
+    }>
+    parseVideoMd5: (content: string) => Promise<{
+      success: boolean
+      md5?: string
+      error?: string
+    }>
+  }
+  analytics: {
+    getOverallStatistics: (force?: boolean) => Promise<{
+      success: boolean
+      data?: {
+        totalMessages: number
+        textMessages: number
+        imageMessages: number
+        voiceMessages: number
+        videoMessages: number
+        emojiMessages: number
+        otherMessages: number
+        sentMessages: number
+        receivedMessages: number
+        firstMessageTime: number | null
+        lastMessageTime: number | null
+        activeDays: number
+        messageTypeCounts: Record<number, number>
+      }
+      error?: string
+    }>
+    getContactRankings: (limit?: number, beginTimestamp?: number, endTimestamp?: number) => Promise<{
+      success: boolean
+      data?: Array<{
+        username: string
+        displayName: string
+        avatarUrl?: string
+        wechatId?: string
+        messageCount: number
+        sentCount: number
+        receivedCount: number
+        lastMessageTime: number | null
+      }>
+      error?: string
+    }>
+    getTimeDistribution: () => Promise<{
+      success: boolean
+      data?: {
+        hourlyDistribution: Record<number, number>
+        weekdayDistribution: Record<number, number>
+        monthlyDistribution: Record<string, number>
+      }
+      error?: string
+    }>
+    getExcludedUsernames: () => Promise<{
+      success: boolean
+      data?: string[]
+      error?: string
+    }>
+    setExcludedUsernames: (usernames: string[]) => Promise<{
+      success: boolean
+      data?: string[]
+      error?: string
+    }>
+    getExcludeCandidates: () => Promise<{
+      success: boolean
+      data?: Array<{
+        username: string
+        displayName: string
+        avatarUrl?: string
+        wechatId?: string
+      }>
+      error?: string
+    }>
+    onProgress: (callback: (payload: { status: string; progress: number }) => void) => () => void
+  }
+  cache: {
+    clearAnalytics: () => Promise<{ success: boolean; error?: string }>
+    clearImages: () => Promise<{ success: boolean; error?: string }>
+    clearAll: () => Promise<{ success: boolean; error?: string }>
+  }
+  groupAnalytics: {
+    getGroupChats: () => Promise<{
+      success: boolean
+      data?: Array<{
+        username: string
+        displayName: string
+        memberCount: number
+        avatarUrl?: string
+      }>
+      error?: string
+    }>
+    getGroupMembers: (chatroomId: string) => Promise<{
+      success: boolean
+      data?: Array<{
+        username: string
+        displayName: string
+        avatarUrl?: string
+        nickname?: string
+        alias?: string
+        remark?: string
+        groupNickname?: string
+        isOwner?: boolean
+      }>
+      error?: string
+    }>
+    getGroupMembersPanelData: (
+      chatroomId: string,
+      options?: { forceRefresh?: boolean; includeMessageCounts?: boolean }
+    ) => Promise<{
+      success: boolean
+      data?: Array<{
+        username: string
+        displayName: string
+        avatarUrl?: string
+        nickname?: string
+        alias?: string
+        remark?: string
+        groupNickname?: string
+        isOwner?: boolean
+        isFriend: boolean
+        messageCount: number
+      }>
+      fromCache?: boolean
+      updatedAt?: number
+      error?: string
+    }>
+    getGroupMessageRanking: (chatroomId: string, limit?: number, startTime?: number, endTime?: number) => Promise<{
+      success: boolean
+      data?: Array<{
+        member: {
+          username: string
+          displayName: string
+          avatarUrl?: string
+        }
+        messageCount: number
+      }>
+      error?: string
+    }>
+    getGroupActiveHours: (chatroomId: string, startTime?: number, endTime?: number) => Promise<{
+      success: boolean
+      data?: {
+        hourlyDistribution: Record<number, number>
+      }
+      error?: string
+    }>
+    getGroupMediaStats: (chatroomId: string, startTime?: number, endTime?: number) => Promise<{
+      success: boolean
+      data?: {
+        typeCounts: Array<{
+          type: number
+          name: string
+          count: number
+        }>
+        total: number
+      }
+      error?: string
+    }>
+    exportGroupMembers: (chatroomId: string, outputPath: string) => Promise<{
+      success: boolean
+      count?: number
+      error?: string
+    }>
+    exportGroupMemberMessages: (
+      chatroomId: string,
+      memberUsername: string,
+      outputPath: string,
+      startTime?: number,
+      endTime?: number
+    ) => Promise<{
+      success: boolean
+      count?: number
+      error?: string
+    }>
+  }
+  export: {
+    getExportStats: (sessionIds: string[], options: unknown) => Promise<{
+      totalMessages: number
+      voiceMessages: number
+      cachedVoiceCount: number
+      needTranscribeCount: number
+      mediaMessages: number
+      estimatedSeconds: number
+      sessions: Array<{ sessionId: string; displayName: string; totalCount: number; voiceCount: number }>
+    }>
+    exportSessions: (sessionIds: string[], outputDir: string, options: ExportOptions) => Promise<{
+      success: boolean
+      successCount?: number
+      failCount?: number
+      pendingSessionIds?: string[]
+      successSessionIds?: string[]
+      failedSessionIds?: string[]
+      error?: string
+    }>
+    exportSession: (sessionId: string, outputPath: string, options: ExportOptions) => Promise<{
+      success: boolean
+      error?: string
+    }>
+    exportContacts: (outputDir: string, options: { format: 'json' | 'csv' | 'vcf'; exportAvatars: boolean; contactTypes: { friends: boolean; groups: boolean; officials: boolean }; selectedUsernames?: string[] }) => Promise<{
+      success: boolean
+      successCount?: number
+      error?: string
+    }>
+    onProgress: (callback: (payload: ExportProgress) => void) => () => void
+  }
+  whisper: {
+    downloadModel: () => Promise<{ success: boolean; modelPath?: string; tokensPath?: string; error?: string }>
+    getModelStatus: () => Promise<{ success: boolean; exists?: boolean; modelPath?: string; tokensPath?: string; sizeBytes?: number; error?: string }>
+    onDownloadProgress: (callback: (payload: { modelName: string; downloadedBytes: number; totalBytes?: number; percent?: number }) => void) => () => void
+  }
+  sns: {
+    getTimeline: (limit: number, offset: number, usernames?: string[], keyword?: string, startTime?: number, endTime?: number) => Promise<{
+      success: boolean
+      timeline?: Array<{
+        id: string
+        username: string
+        nickname: string
+        avatarUrl?: string
+        createTime: number
+        contentDesc: string
+        type?: number
+        media: Array<{
+          url: string
+          thumb: string
+          md5?: string
+          token?: string
+          key?: string
+          encIdx?: string
+          livePhoto?: {
+            url: string
+            thumb: string
+            md5?: string
+            token?: string
+            key?: string
+            encIdx?: string
+          }
+        }>
+        likes: Array<string>
+        comments: Array<{ id: string; nickname: string; content: string; refCommentId: string; refNickname?: string; emojis?: Array<{ url: string; md5: string; width: number; height: number; encryptUrl?: string; aesKey?: string }> }>
+        rawXml?: string
+      }>
+      error?: string
+    }>
+    proxyImage: (payload: { url: string; key?: string | number }) => Promise<{ success: boolean; dataUrl?: string; videoPath?: string; error?: string }>
+    downloadImage: (payload: { url: string; key?: string | number }) => Promise<{ success: boolean; data?: unknown; contentType?: string; error?: string }>
+    exportTimeline: (options: {
+      outputDir: string
+      format: 'json' | 'html' | 'arkmejson'
+      usernames?: string[]
+      keyword?: string
+      exportImages?: boolean
+      exportLivePhotos?: boolean
+      exportVideos?: boolean
+      startTime?: number
+      endTime?: number
+    }) => Promise<{ success: boolean; filePath?: string; postCount?: number; mediaCount?: number; error?: string }>
+    onExportProgress: (callback: (payload: { current: number; total: number; status: string }) => void) => () => void
+    selectExportDir: () => Promise<{ canceled: boolean; filePath?: string }>
+    getSnsUsernames: () => Promise<{ success: boolean; usernames?: string[]; error?: string }>
+    getUserPostCounts: () => Promise<{ success: boolean; counts?: Record<string, number>; error?: string }>
+    getExportStatsFast: () => Promise<{ success: boolean; data?: { totalPosts: number; totalFriends: number; myPosts: number | null }; error?: string }>
+    getExportStats: () => Promise<{ success: boolean; data?: { totalPosts: number; totalFriends: number; myPosts: number | null }; error?: string }>
+    getUserPostStats: (username: string) => Promise<{ success: boolean; data?: { username: string; totalPosts: number }; error?: string }>
+    downloadEmoji: (params: { url: string; encryptUrl?: string; aesKey?: string }) => Promise<{ success: boolean; localPath?: string; error?: string }>
+  }
+  http: {
+    start: (port?: number) => Promise<{ success: boolean; port?: number; error?: string }>
+    stop: () => Promise<{ success: boolean }>
+    status: () => Promise<{ running: boolean; port: number | null; mediaExportPath: string; authRequired: true; tokenPresent: boolean; tokenMasked: string | null; allowedOrigins: string[]; securityMode: 'strict-local-readonly' }>
+    copyToken: () => Promise<{ success: true; tokenPresent: boolean; tokenMasked: string | null }>
+    rotateToken: () => Promise<{ success: true; tokenPresent: boolean; tokenMasked: string | null }>
+    setAllowedOrigins: (origins: string[]) => Promise<{ success: boolean; allowedOrigins: string[] }>
+  }
+}
+
+export interface ExportOptions {
+  format: 'chatlab' | 'chatlab-jsonl' | 'json' | 'arkme-json' | 'html' | 'txt' | 'excel' | 'weclone' | 'sql'
+  contentType?: 'text' | 'voice' | 'image' | 'video' | 'emoji'
+  dateRange?: { start: number; end: number } | null
+  senderUsername?: string
+  fileNameSuffix?: string
+  exportMedia?: boolean
+  exportAvatars?: boolean
+  exportImages?: boolean
+  exportVoices?: boolean
+  exportVideos?: boolean
+  exportEmojis?: boolean
+  exportVoiceAsText?: boolean
+  excelCompactColumns?: boolean
+  txtColumns?: string[]
+  sessionLayout?: 'shared' | 'per-session'
+  sessionNameWithTypePrefix?: boolean
+  displayNamePreference?: 'group-nickname' | 'remark' | 'nickname'
+  exportConcurrency?: number
+}
+
+export interface ExportProgress {
+  current: number
+  total: number
+  currentSession: string
+  currentSessionId?: string
+  phase: 'preparing' | 'exporting' | 'exporting-media' | 'exporting-voice' | 'writing' | 'complete'
+  phaseProgress?: number
+  phaseTotal?: number
+  phaseLabel?: string
+}
+
+export interface WxidInfo {
+  wxid: string
+  modifiedTime: number
+}
+
+declare global {
+  interface Window {
+    electronAPI: ElectronAPI
+  }
+
+  // Electron 类型声明
+  namespace Electron {
+    interface OpenDialogOptions {
+      title?: string
+      defaultPath?: string
+      filters?: { name: string; extensions: string[] }[]
+      properties?: ('openFile' | 'openDirectory' | 'multiSelections' | 'createDirectory')[]
+    }
+    interface OpenDialogReturnValue {
+      canceled: boolean
+      filePaths: string[]
+    }
+    interface SaveDialogOptions {
+      title?: string
+      defaultPath?: string
+      filters?: { name: string; extensions: string[] }[]
+    }
+    interface SaveDialogReturnValue {
+      canceled: boolean
+      filePath?: string
+    }
+  }
+}
+
+export { }

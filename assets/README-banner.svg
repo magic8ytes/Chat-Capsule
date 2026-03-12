@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="400" viewBox="0 0 1600 400" role="img" aria-label="Chat Capsule">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B1F2A"/>
+      <stop offset="60%" stop-color="#123A4F"/>
+      <stop offset="100%" stop-color="#1B4C68"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="70%" cy="20%" r="60%">
+      <stop offset="0%" stop-color="#4CC9F0" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#4CC9F0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="400" fill="url(#bg)"/>
+  <rect width="1600" height="400" fill="url(#glow)"/>
+  <g opacity="0.25" fill="#8BD3F7">
+    <circle cx="1260" cy="110" r="80"/>
+    <circle cx="1420" cy="230" r="120"/>
+    <circle cx="1180" cy="300" r="45"/>
+  </g>
+  <g opacity="0.18" fill="#FFFFFF">
+    <circle cx="220" cy="80" r="6"/>
+    <circle cx="310" cy="120" r="4"/>
+    <circle cx="260" cy="180" r="5"/>
+    <circle cx="360" cy="160" r="3"/>
+    <circle cx="440" cy="110" r="4"/>
+  </g>
+  <text x="120" y="180" fill="#FFFFFF" font-size="64" font-family="Georgia, 'Times New Roman', serif" font-weight="600">Chat Capsule</text>
+  <text x="120" y="230" fill="#C7E8FF" font-size="26" font-family="Georgia, 'Times New Roman', serif" letter-spacing="0.5">macOS-first, local-only, read-only chat history explorer</text>
+  <text x="120" y="270" fill="#8FD3FF" font-size="20" font-family="Arial, sans-serif" letter-spacing="1.2">LOCAL · READ-ONLY · PRIVACY-BOUND</text>
+</svg>

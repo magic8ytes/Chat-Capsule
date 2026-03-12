@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "platform": "macos",
+  "accountRoot": "/Users/yourname/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/Account/example-account",
+  "dbStoragePath": "/Users/yourname/Documents/WeChatData/db_storage",
+  "wxid": "wxid_example",
+  "databaseKeys": {
+    "session/session.db": {
+      "enc_key": "replace-with-session-enc-key",
+      "salt": "replace-with-session-salt",
+      "size_mb": 16
+    },
+    "contact/contact.db": {
+      "enc_key": "replace-with-contact-enc-key",
+      "salt": "replace-with-contact-salt",
+      "size_mb": 32
+    },
+    "message/message_0.db": {
+      "enc_key": "replace-with-message-enc-key",
+      "salt": "replace-with-message-salt",
+      "size_mb": 128
+    },
+    "message/biz_message_0.db": {
+      "enc_key": "replace-with-biz-message-enc-key",
+      "salt": "replace-with-biz-message-salt",
+      "size_mb": 64
+    },
+    "message/media_0.db": {
+      "enc_key": "replace-with-media-enc-key",
+      "salt": "replace-with-media-salt",
+      "size_mb": 256
+    },
+    "hardlink/hardlink.db": {
+      "enc_key": "replace-with-hardlink-enc-key",
+      "salt": "replace-with-hardlink-salt",
+      "size_mb": 64
+    },
+    "head_image/head_image.db": {
+      "enc_key": "replace-with-head-image-enc-key",
+      "salt": "replace-with-head-image-salt",
+      "size_mb": 64
+    },
+    "emoticon/emoticon.db": {
+      "enc_key": "replace-with-emoticon-enc-key",
+      "salt": "replace-with-emoticon-salt",
+      "size_mb": 64
+    },
+    "sns/sns.db": {
+      "enc_key": "replace-with-sns-enc-key",
+      "salt": "replace-with-sns-salt",
+      "size_mb": 64
+    }
+  },
+  "imageXorKey": 95,
+  "imageAesKey": "replace-with-image-aes-key",
+  "cachePath": "/Users/yourname/Documents/WechatHistoryManager/ChatCapsule/.cache/chat-capsule",
+  "readOnly": true
+}
