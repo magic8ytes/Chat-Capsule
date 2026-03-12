@@ -8,15 +8,24 @@
   <strong>macOS 优先 · 完全本地 · 只读优先</strong><br />
 </p>
 
-<p align="center">
-  <a href="https://github.com/magic8ytes/Chat-Capsule/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/magic8ytes/Chat-Capsule/ci.yml?branch=main" alt="CI" /></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-blue" alt="License" /></a>
-</p>
-
+---
 Chat Capsule 是一个 **macOS 优先、完全本地、只读优先** 的聊天记录查看、分析与导出桌面应用。
 
 它基于上游项目 [WeFlow](https://github.com/hicccc77/WeFlow) 的维护分支继续演进。当前仓库为 **非官方维护分支**，不代表上游官方立场。
 在此基础上我对项目进行了重构，加入了一些架构设计与安全方面的优化，同时精简了部分我在聊天记录管理中用不到的功能。
+
+---
+
+<p align="center">
+  <img src="app.png" alt="WeFlow" width="90%">
+</p>
+
+---
+
+<p align="center">
+  <a href="https://github.com/magic8ytes/Chat-Capsule/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/magic8ytes/Chat-Capsule/ci.yml?branch=main" alt="CI" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-blue" alt="License" /></a>
+</p>
 
 ## 主要能力
 
